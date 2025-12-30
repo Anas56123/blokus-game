@@ -2,13 +2,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PlayerColor, Coordinate, GameState } from '../types';
-import { PLAYERS, INITIAL_PIECES, BOARD_SIZE } from '../constants';
-import { createEmptyBoard, rotateShape, flipShape, isValidMove, normalizeShape } from '../utils';
+import { PlayerColor, GameState } from '../types';
+import { PLAYERS, INITIAL_PIECES } from '../types/constants';
+import { createEmptyBoard, rotateShape, flipX, flipY, isValidMove, normalizeShape, hasValidMoves } from '../utils';
 import Board from '../components/Board';
 import BlokusPiece from '../components/BlokusPiece';
 
 export default function BlokusGame() {
+  const [darkMode, setDarkMode] = useState(false);
   const [gameState, setGameState] = useState<GameState>({
     board: createEmptyBoard(),
     currentPlayerIndex: 0,
@@ -25,14 +26,44 @@ export default function BlokusGame() {
   });
 
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+  const [winner, setWinner] = useState<PlayerColor | null>(null);
 
-  // Utility to update score
-  const calculateScore = (handIds: string[]) => {
-    // Basic scoring: -1 per unit square remaining. 
-    // Usually standard is: 89 points total if clear. Here we just count placed squares.
-    // For simplicity, let's just show remaining pieces count.
-    return handIds.length; 
+  // Check for winner - check after each move
+  const checkWinner = (hands: Record<PlayerColor, string[]>) => {
+    for (const player of PLAYERS) {
+      if (hands[player].length === 0) {
+        setWinner(player);
+        return true;
+      }
+    }
+    return false;
   };
+
+  // Auto-pass if player has no valid moves
+  useEffect(() => {
+    if (winner) return; // Don't auto-pass if game is over
+    
+    const hasMoves = hasValidMoves(
+      gameState.board,
+      gameState.hands,
+      currentPlayer,
+      INITIAL_PIECES
+    );
+
+    if (!hasMoves && gameState.hands[currentPlayer].length > 0) {
+      // Auto-pass after a short delay to show the state
+      const timer = setTimeout(() => {
+        setGameState(prev => ({
+          ...prev,
+          currentPlayerIndex: (prev.currentPlayerIndex + 1) % 4,
+          selectedPieceId: null,
+          selectedPieceVariant: null
+        }));
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [gameState.currentPlayerIndex, gameState.board, gameState.hands, currentPlayer, winner]);
+
 
   const handleSelectPiece = (id: string) => {
     const pieceDef = INITIAL_PIECES.find(p => p.id === id);
@@ -54,17 +85,26 @@ export default function BlokusGame() {
     }
   };
 
-  const handleFlip = () => {
+  const handleFlipX = () => {
     if (gameState.selectedPieceVariant) {
       setGameState(prev => ({
         ...prev,
-        selectedPieceVariant: normalizeShape(flipShape(prev.selectedPieceVariant!))
+        selectedPieceVariant: normalizeShape(flipX(prev.selectedPieceVariant!))
+      }));
+    }
+  };
+
+  const handleFlipY = () => {
+    if (gameState.selectedPieceVariant) {
+      setGameState(prev => ({
+        ...prev,
+        selectedPieceVariant: normalizeShape(flipY(prev.selectedPieceVariant!))
       }));
     }
   };
 
   const handlePlacePiece = (x: number, y: number) => {
-    const { board, selectedPieceVariant, selectedPieceId, hands, currentPlayerIndex, players } = gameState;
+    const { board, selectedPieceVariant, selectedPieceId, hands, currentPlayerIndex } = gameState;
     
     if (!selectedPieceVariant || !selectedPieceId) return;
 
@@ -77,14 +117,18 @@ export default function BlokusGame() {
 
       // 2. Remove Piece from Hand
       const newHand = hands[currentPlayer].filter(id => id !== selectedPieceId);
+      const newHands = { ...hands, [currentPlayer]: newHand };
 
-      // 3. Next Turn
+      // 3. Check for winner
+      checkWinner(newHands);
+
+      // 4. Next Turn
       const nextPlayerIndex = (currentPlayerIndex + 1) % 4;
 
       setGameState({
         ...gameState,
         board: newBoard,
-        hands: { ...hands, [currentPlayer: newHand] },
+        hands: newHands,
         currentPlayerIndex: nextPlayerIndex,
         selectedPieceId: null,
         selectedPieceVariant: null,
@@ -103,20 +147,87 @@ export default function BlokusGame() {
     }));
   };
 
-  return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center py-8 font-sans">
-      <h1 className="text-3xl font-bold mb-4">Next.js Blokus</h1>
+  const handleResetGame = () => {
+    setGameState({
+      board: createEmptyBoard(),
+      currentPlayerIndex: 0,
+      players: PLAYERS,
+      hands: {
+        blue: INITIAL_PIECES.map(p => p.id),
+        yellow: INITIAL_PIECES.map(p => p.id),
+        red: INITIAL_PIECES.map(p => p.id),
+        green: INITIAL_PIECES.map(p => p.id),
+      },
+      scores: { blue: 0, yellow: 0, red: 0, green: 0 },
+      selectedPieceId: null,
+      selectedPieceVariant: null,
+    });
+    setWinner(null);
+  };
 
-      <div className="flex flex-col lg:flex-row gap-8 items-start">
+  const getColorStyles = (color: PlayerColor) => {
+    switch (color) {
+      case 'blue': return 'bg-blue-600 border-blue-800 text-blue-100';
+      case 'yellow': return 'bg-yellow-400 border-yellow-600 text-yellow-900';
+      case 'red': return 'bg-red-600 border-red-800 text-red-100';
+      case 'green': return 'bg-green-600 border-green-800 text-green-100';
+    }
+  };
+
+  return (
+    <div className={`min-h-screen flex flex-col items-center py-8 font-sans transition-colors duration-200 ${darkMode ? 'bg-gray-900 text-gray-100' : 'bg-gray-100 text-gray-900'}`}>
+      <div className="flex items-center gap-4 mb-4">
+        <h1 className={`text-3xl font-bold ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>Next.js Blokus</h1>
+        <button
+          onClick={() => setDarkMode(!darkMode)}
+          className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+            darkMode 
+              ? 'bg-yellow-500 hover:bg-yellow-600 text-gray-900' 
+              : 'bg-gray-800 hover:bg-gray-700 text-white'
+          }`}
+          aria-label="Toggle dark mode"
+        >
+          {darkMode ? '☀️ Light' : '🌙 Dark'}
+        </button>
+      </div>
+
+      {/* Winner Modal */}
+      {winner && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl border-4 ${getColorStyles(winner)}`}>
+            <div className="text-center">
+              <h2 className="text-4xl font-bold mb-4 uppercase">Winner!</h2>
+              <div className={`text-6xl font-bold mb-6 uppercase ${getColorStyles(winner)}`}>
+                {winner}
+              </div>
+              <p className={`text-lg mb-6 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                {winner.charAt(0).toUpperCase() + winner.slice(1)} has placed all their pieces!
+              </p>
+              <button
+                onClick={handleResetGame}
+                className={`px-6 py-3 rounded-lg font-semibold text-lg transition-colors ${
+                  darkMode 
+                    ? 'bg-gray-700 hover:bg-gray-600 text-white' 
+                    : 'bg-gray-800 hover:bg-gray-700 text-white'
+                }`}
+              >
+                Play Again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col lg:flex-row gap-8 items-start w-full max-w-7xl px-4">
         {/* Left Side: Game Info & Controls */}
-        <div className="flex flex-col gap-4 w-full max-w-xs bg-white p-4 rounded-xl shadow-md">
-          <div className="text-xl font-semibold">
+        <div className={`flex flex-col gap-4 w-full max-w-xs p-4 rounded-xl shadow-md ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+          <div className={`text-xl font-semibold ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>
             Current Turn: <span className={`uppercase text-${currentPlayer}-600`}>{currentPlayer}</span>
           </div>
           
           <div className="grid grid-cols-2 gap-2 text-sm">
             {PLAYERS.map(p => (
-              <div key={p} className={`flex justify-between p-2 rounded ${p === currentPlayer ? 'bg-gray-200 font-bold' : ''}`}>
+              <div key={p} className={`flex justify-between p-2 rounded ${p === currentPlayer ? (darkMode ? 'bg-gray-700 font-bold' : 'bg-gray-200 font-bold') : (darkMode ? 'bg-gray-700/50' : 'bg-gray-50')} ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>
                 <span className="capitalize">{p}</span>
                 <span>{gameState.hands[p].length} left</span>
               </div>
@@ -127,45 +238,61 @@ export default function BlokusGame() {
             <button 
               onClick={handleRotate} 
               disabled={!gameState.selectedPieceId}
-              className="flex-1 bg-blue-500 text-white py-2 rounded disabled:opacity-50 hover:bg-blue-600"
+              className="flex-1 bg-blue-500 text-white py-2 rounded disabled:opacity-50 hover:bg-blue-600 transition-colors"
             >
-              Rotate (R)
+              Rotate
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button 
+              onClick={handleFlipX} 
+              disabled={!gameState.selectedPieceId}
+              className="flex-1 bg-purple-500 text-white py-2 rounded disabled:opacity-50 hover:bg-purple-600 transition-colors"
+            >
+              Flip X
             </button>
             <button 
-              onClick={handleFlip} 
+              onClick={handleFlipY} 
               disabled={!gameState.selectedPieceId}
-              className="flex-1 bg-purple-500 text-white py-2 rounded disabled:opacity-50 hover:bg-purple-600"
+              className="flex-1 bg-indigo-500 text-white py-2 rounded disabled:opacity-50 hover:bg-indigo-600 transition-colors"
             >
-              Flip (F)
+              Flip Y
             </button>
           </div>
           <button 
               onClick={handlePass} 
-              className="w-full bg-red-500 text-white py-2 rounded hover:bg-red-600"
+              className="w-full bg-red-500 text-white py-2 rounded hover:bg-red-600 transition-colors"
             >
               Pass Turn
             </button>
             
-          <div className="text-xs text-gray-500 mt-2">
+          <div className={`text-xs mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
             Select a piece, then click on the board.
             <br />
             First move must touch your corner.
             <br />
             Subsequent moves must touch corners of your color only.
+            <br />
+            {!hasValidMoves(gameState.board, gameState.hands, currentPlayer, INITIAL_PIECES) && gameState.hands[currentPlayer].length > 0 && (
+              <span className="text-red-500 font-semibold">No valid moves - auto-passing...</span>
+            )}
           </div>
         </div>
 
         {/* Center: The Board */}
-        <Board 
-          grid={gameState.board} 
-          currentPlayer={currentPlayer}
-          selectedPieceShape={gameState.selectedPieceVariant}
-          onPlacePiece={handlePlacePiece}
-        />
+        <div className="shrink-0">
+          <Board 
+            grid={gameState.board} 
+            currentPlayer={currentPlayer}
+            selectedPieceShape={gameState.selectedPieceVariant}
+            onPlacePiece={handlePlacePiece}
+            darkMode={darkMode}
+          />
+        </div>
 
         {/* Right Side: Player Hand */}
-        <div className="w-full max-w-xs bg-white p-4 rounded-xl shadow-md overflow-y-auto max-h-[600px]">
-          <h3 className="font-bold mb-2">Your Pieces</h3>
+        <div className={`w-full max-w-xs p-4 rounded-xl shadow-md overflow-y-auto max-h-[600px] ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+          <h3 className={`font-bold mb-2 ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>Your Pieces</h3>
           <div className="flex flex-wrap gap-2">
             {gameState.hands[currentPlayer].map(pieceId => {
               const pieceDef = INITIAL_PIECES.find(p => p.id === pieceId);

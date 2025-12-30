@@ -1,7 +1,7 @@
 // components/Board.tsx
 import React, { useState } from 'react';
 import { PlayerColor, Coordinate } from '../types';
-import { BOARD_SIZE } from '../constants';
+import { BOARD_SIZE } from '../types/constants';
 import { isValidMove } from '../utils';
 
 interface BoardProps {
@@ -9,9 +9,10 @@ interface BoardProps {
   currentPlayer: PlayerColor;
   selectedPieceShape: Coordinate[] | null;
   onPlacePiece: (x: number, y: number) => void;
+  darkMode?: boolean;
 }
 
-const Board: React.FC<BoardProps> = ({ grid, currentPlayer, selectedPieceShape, onPlacePiece }) => {
+const Board: React.FC<BoardProps> = ({ grid, currentPlayer, selectedPieceShape, onPlacePiece, darkMode = false }) => {
   const [hoverPos, setHoverPos] = useState<Coordinate | null>(null);
 
   const getColorClass = (color: PlayerColor | null) => {
@@ -20,7 +21,7 @@ const Board: React.FC<BoardProps> = ({ grid, currentPlayer, selectedPieceShape, 
       case 'yellow': return 'bg-yellow-400 border-yellow-600';
       case 'red': return 'bg-red-600 border-red-800';
       case 'green': return 'bg-green-600 border-green-800';
-      default: return 'bg-gray-200 border-gray-300';
+      default: return darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-200 border-gray-300';
     }
   };
 
@@ -39,8 +40,14 @@ const Board: React.FC<BoardProps> = ({ grid, currentPlayer, selectedPieceShape, 
 
   return (
     <div 
-      className="grid gap-[1px] bg-gray-400 border-2 border-gray-800 p-1 select-none"
-      style={{ gridTemplateColumns: `repeat(${BOARD_SIZE}, minmax(0, 1fr))` }}
+      className={`grid gap-px border-2 p-1 select-none ${darkMode ? 'bg-gray-600 border-gray-500' : 'bg-gray-400 border-gray-800'}`}
+      style={{ 
+        gridTemplateColumns: `repeat(${BOARD_SIZE}, minmax(0, 1fr))`,
+        width: '600px',
+        height: '600px',
+        minWidth: '600px',
+        minHeight: '600px'
+      }}
       onMouseLeave={() => setHoverPos(null)}
     >
       {grid.map((row, r) => (

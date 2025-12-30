@@ -1,53 +1,46 @@
-// src/components/GameBoard.tsx
-
+// components/BlokusPiece.tsx
 import React from 'react';
-import { Cell, GameState, PlayerColor } from '../types/game';
+import { Coordinate, PlayerColor } from '../types';
 
-interface GameBoardProps {
-  gameState: GameState;
-  onCellClick: (row: number, col: number) => void;
-  // Other props for piece selection, etc.
+interface BlokusPieceProps {
+  shape: Coordinate[];
+  color: PlayerColor;
+  onClick?: () => void;
+  isSelected?: boolean;
 }
 
-// Define the size of the Blokus board
-const BOARD_SIZE = 20;
+const BlokusPiece: React.FC<BlokusPieceProps> = ({ shape, color, onClick, isSelected }) => {
+  // Calculate bounding box to render SVG
+  const minX = Math.min(...shape.map(p => p.x));
+  const maxX = Math.max(...shape.map(p => p.x));
+  const minY = Math.min(...shape.map(p => p.y));
+  const maxY = Math.max(...shape.map(p => p.y));
+  
+  const width = maxX - minX + 1;
+  const height = maxY - minY + 1;
 
-const getColorClass = (owner: PlayerColor | null): string => {
-  if (!owner) return 'bg-gray-100 border-gray-300';
-  return `bg-${owner}-500 border-${owner}-700`; // Requires Tailwind CSS setup
-};
+  const colorMap: Record<PlayerColor, string> = {
+    blue: 'fill-blue-500',
+    yellow: 'fill-yellow-400',
+    red: 'fill-red-500',
+    green: 'fill-green-500',
+  };
 
-export const GameBoard: React.FC<GameBoardProps> = ({ gameState, onCellClick }) => {
   return (
-    <div className="flex justify-center p-4">
-      <div 
-        style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)`,
-          width: '800px', // Adjust size as needed
-          aspectRatio: '1 / 1',
-          border: '2px solid #333',
-        }}
+    <div 
+      onClick={onClick}
+      className={`p-1 cursor-pointer transition-all duration-200 ${isSelected ? 'ring-2 ring-offset-2 ring-gray-800 scale-110' : 'hover:scale-105'}`}
+    >
+      <svg 
+        viewBox={`${minX} ${minY} ${width} ${height}`} 
+        className={`w-12 h-12 ${colorMap[color]} stroke-black stroke-[0.1]`}
       >
-        {gameState.board.map((row, r) =>
-          row.map((cell: Cell, c) => (
-            <div
-              key={`${r}-${c}`}
-              className={`w-full h-full ${getColorClass(cell.owner)} border border-gray-200 cursor-pointer`}
-              onClick={() => onCellClick(r, c)}
-              // Add a subtle marker for corner cells
-              title={cell.isCorner ? 'Start Corner' : ''}
-              style={{
-                boxSizing: 'border-box',
-                // Optional: visual cue for the corner cells for first move
-                ...(cell.isCorner && { backgroundColor: 'rgba(0, 0, 0, 0.1)' })
-              }}
-            >
-              {/* Optional: Add a simple cell indicator */}
-            </div>
-          ))
-        )}
-      </div>
+        {shape.map((block, i) => (
+          <rect key={i} x={block.x} y={block.y} width="1" height="1" />
+        ))}
+      </svg>
     </div>
   );
 };
+
+export default BlokusPiece;
